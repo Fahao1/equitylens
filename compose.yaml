@@ -1,0 +1,47 @@
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: equitylens
+      POSTGRES_DB: equitylens
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-equitylens-local-development}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U equitylens -d equitylens"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      EQUITYLENS_DATABASE_URL: postgresql+psycopg://equitylens:${POSTGRES_PASSWORD:-equitylens-local-development}@db:5432/equitylens
+      EQUITYLENS_DATA_DIR: /data
+      EQUITYLENS_DEMO: ${EQUITYLENS_DEMO:-false}
+      EQUITYLENS_LLM_API_KEY: ${EQUITYLENS_LLM_API_KEY:-}
+      EQUITYLENS_LLM_MODEL: ${EQUITYLENS_LLM_MODEL:-gpt-4.1-mini}
+      EQUITYLENS_LLM_BASE_URL: ${EQUITYLENS_LLM_BASE_URL:-https://api.openai.com/v1}
+    volumes:
+      - provider-cache:/data
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8000:8000"
+    restart: unless-stopped
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8080:80"
+    restart: unless-stopped
+volumes:
+  postgres-data:
+  provider-cache:
